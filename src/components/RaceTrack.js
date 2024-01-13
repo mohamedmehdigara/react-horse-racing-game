@@ -1,6 +1,6 @@
 import React from 'react';
 import styled from 'styled-components';
-import Horse from './Horse';
+import HorseSVG from './HorseSVG';
 
 const TrackContainer = styled.div`
   width: 80%;
@@ -14,11 +14,10 @@ const RaceTrack = ({ horses }) => {
   return (
     <TrackContainer>
       {horses.map((horse, index) => (
-        <Horse
+        <HorseSVG
           key={index}
           position={horse.position}
           color={horse.color}
-          number={horse.number}
           animationDuration={horse.animationDuration}
         />
       ))}
@@ -27,3 +26,4 @@ const RaceTrack = ({ horses }) => {
 };
 
 export default RaceTrack;
+

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import styled from 'styled-components';
 import RaceTrack from './components/RaceTrack';
-import RaceButton from './components/RaceButton';
+import GameControls from './components/GameControls';
+import RaceInfo from './components/RaceInfo';
 import WinnerBanner from './components/WinnerBanner';
 
 const Container = styled.div`
@@ -39,7 +40,8 @@ const App = () => {
     <Container>
       <h1>Horse Racing Game</h1>
       <RaceTrack horses={horses} />
-      <RaceButton onClick={startRace} />
+      <GameControls onStartRace={startRace} />
+      <RaceInfo winner={winner} />
       <WinnerBanner winner={winner} />
     </Container>
   );

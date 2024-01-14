@@ -4,6 +4,7 @@ import RaceTrack from './components/RaceTrack';
 import GameControls from './components/GameControls';
 import RaceInfo from './components/RaceInfo';
 import WinnerBanner from './components/WinnerBanner';
+import RaceHistory from './components/RaceHistory';
 
 const Container = styled.div`
   text-align: center;
@@ -18,6 +19,7 @@ const App = () => {
   ]);
 
   const [winner, setWinner] = useState(null);
+  const [raceHistory, setRaceHistory] = useState([]);
 
   const startRace = () => {
     const newHorses = horses.map(horse => ({
@@ -33,8 +35,13 @@ const App = () => {
         prev.position > current.position ? prev : current
       );
       setWinner(winningHorse.number);
+
+      // Update race history
+      setRaceHistory(prevHistory => [...prevHistory, `Race ${prevHistory.length + 1}: Horse ${winningHorse.number} wins`]);
     }, 5000); // 5 seconds delay
   };
+
+ 
 
   return (
     <Container>
@@ -43,6 +50,8 @@ const App = () => {
       <GameControls onStartRace={startRace} />
       <RaceInfo winner={winner} />
       <WinnerBanner winner={winner} />
+      <RaceHistory history={raceHistory} />
+      {/* Display placed bets or other relevant information */}
     </Container>
   );
 };

@@ -5,6 +5,8 @@ import GameControls from './components/GameControls';
 import RaceInfo from './components/RaceInfo';
 import WinnerBanner from './components/WinnerBanner';
 import RaceHistory from './components/RaceHistory';
+import ResetButton from './components/ResetButton';
+import Leaderboard from './components/Leaderboard';
 
 const Container = styled.div`
   text-align: center;
@@ -41,7 +43,14 @@ const App = () => {
     }, 5000); // 5 seconds delay
   };
 
- 
+  const resetRace = () => {
+    setHorses(horses.map(horse => ({
+      ...horse,
+      position: 0,
+    })));
+    setWinner(null);
+    setRaceHistory([]);
+  };
 
   return (
     <Container>
@@ -51,7 +60,9 @@ const App = () => {
       <RaceInfo winner={winner} />
       <WinnerBanner winner={winner} />
       <RaceHistory history={raceHistory} />
-      {/* Display placed bets or other relevant information */}
+      <Leaderboard horses={horses} />
+      <ResetButton onReset={resetRace} />
+      {/* Display other relevant information */}
     </Container>
   );
 };

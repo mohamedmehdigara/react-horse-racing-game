@@ -26,4 +26,3 @@ const RaceTrack = ({ horses }) => {
 };
 
 export default RaceTrack;
-

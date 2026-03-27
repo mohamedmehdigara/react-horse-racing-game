@@ -1,265 +1,181 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import styled, { keyframes, createGlobalStyle } from 'styled-components';
+import styled, { createGlobalStyle } from 'styled-components';
 
-// --- Global Styles ---
 const GlobalStyle = createGlobalStyle`
-  body {
-    margin: 0;
-    padding: 0;
-    background: #020617;
-    font-family: 'Montserrat', sans-serif;
-    color: #f8fafc;
-    overflow: hidden;
+  body { margin: 0; background: #020617; font-family: 'Inter', sans-serif; overflow: hidden; }
+
+  /* THE BODY LEAP: Simulates the suspension phase where the horse is airborne */
+  @keyframes suspensionLeap {
+    0%, 100% { transform: translateY(0) rotate(-2deg); }
+    30% { transform: translateY(-45px) rotate(8deg); } /* The Leap */
+    60% { transform: translateY(-5px) rotate(-1deg); } /* The Impact */
+    85% { transform: translateY(8px) rotate(-5deg); }  /* The Compression */
+  }
+
+  /* ROTARY LEG CYCLE: Reaches far forward, then snaps back with power */
+  @keyframes rotaryGallop {
+    0% { transform: rotate(45deg) scaleY(0.7); }    /* Tucked under belly */
+    40% { transform: rotate(-60deg) scaleY(1.15); } /* Full extension reach */
+    70% { transform: rotate(20deg) scaleY(0.9); }   /* Ground strike / Push */
+    100% { transform: rotate(45deg) scaleY(0.7); }
+  }
+
+  /* NECK TENSION: Balances the leap */
+  @keyframes neckPower {
+    0%, 100% { transform: translate(0,0) rotate(0deg); }
+    30% { transform: translate(8px, -12px) rotate(-10deg); }
+    70% { transform: translate(-3px, 5px) rotate(5deg); }
   }
 `;
 
-// --- The "Physics" of the Gallop ---
-
-// The body must lunge and compress to show power
-const lungeAndCompress = keyframes`
-  0%, 100% { transform: scaleX(1) translateY(0) rotate(-2deg); }
-  35% { transform: scaleX(1.15) translateY(-12px) rotate(4deg); }
-  70% { transform: scaleX(0.95) translateY(2px) rotate(-1deg); }
-`;
-
-// Elliptical motion for the front legs (reaching)
-const frontGait = keyframes`
-  0% { transform: rotate(-45deg) translateY(0) translateX(0); }
-  25% { transform: rotate(10deg) translateY(-8px) translateX(5px); }
-  50% { transform: rotate(60deg) translateY(0) translateX(0); }
-  75% { transform: rotate(10deg) translateY(4px) translateX(-2px); }
-  100% { transform: rotate(-45deg) translateY(0) translateX(0); }
-`;
-
-// Elliptical motion for the back legs (pushing)
-const backGait = keyframes`
-  0% { transform: rotate(50deg) translateY(0) translateX(0); }
-  25% { transform: rotate(-5deg) translateY(4px) translateX(-3px); }
-  50% { transform: rotate(-55deg) translateY(0) translateX(0); }
-  75% { transform: rotate(-5deg) translateY(-8px) translateX(5px); }
-  100% { transform: rotate(50deg) translateY(0) translateX(0); }
-`;
-
-// --- Styled Components ---
-const Stage = styled.div`
+const Arena = styled.div`
+  flex: 1;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding: 50px 20px;
-  height: 100vh;
-`;
-
-const TrackBoard = styled.div`
-  width: 100%;
-  max-width: 1100px;
-  background: linear-gradient(180deg, #166534 0%, #14532d 100%);
-  border: 15px solid #451a03;
-  border-radius: 30px;
+  background: linear-gradient(180deg, #14532d 0%, #064e3b 100%);
+  border: 10px solid #1e1b18;
+  margin: 15px;
   position: relative;
-  box-shadow: 0 40px 100px rgba(0,0,0,0.8);
   overflow: hidden;
+  border-radius: 20px;
+  box-shadow: inset 0 0 100px rgba(0,0,0,0.4);
 `;
 
-const Lane = styled.div`
-  height: 120px;
-  border-bottom: 3px solid rgba(255,255,255,0.05);
-  display: flex;
-  align-items: center;
-  position: relative;
-  &:last-child { border-bottom: none; }
-`;
-
-const FinishLine = styled.div`
-  position: absolute;
-  right: 100px;
-  top: 0;
-  bottom: 0;
-  width: 30px;
-  background: repeating-linear-gradient(0deg, #fff, #fff 15px, #000 15px, #000 30px);
-  box-shadow: -5px 0 15px rgba(0,0,0,0.4);
-  z-index: 1;
-`;
-
-const HorseEntity = styled.div.attrs(props => ({
-  style: { left: `${props.progress}%` }
+const HorseActor = styled.div.attrs(props => ({
+  style: { 
+    left: `${props.progress}%`, 
+    '--stride-duration': `${0.45 / (props.v || 0.8)}s` 
+  }
 }))`
   position: absolute;
-  width: 110px;
-  height: 80px;
+  height: 75%;
+  aspect-ratio: 2 / 1;
   transition: left 0.1s linear;
   z-index: 10;
-`;
 
-const MuscularBody = styled.div`
-  width: 70px;
-  height: 40px;
-  background: ${props => props.color};
-  border-radius: 35% 65% 30% 35%;
-  position: relative;
-  box-shadow: inset -5px -5px 15px rgba(0,0,0,0.2);
-  animation: ${props => props.active ? lungeAndCompress : 'none'} ${props => 0.4 / props.v}s infinite ease-in-out;
-`;
+  .horse-body {
+    height: 100%;
+    animation: ${props => props.run ? 'suspensionLeap var(--stride-duration) infinite ease-in-out' : 'none'};
+  }
 
-const AnatomicalHead = styled.div`
-  width: 35px;
-  height: 22px;
-  background: ${props => props.color};
-  position: absolute;
-  right: -22px;
-  top: -15px;
-  border-radius: 8px 22px 5px 12px;
-  transform: rotate(12deg);
-  &::after { /* The Mane */
-    content: '';
-    position: absolute;
-    left: 2px;
-    top: -5px;
-    width: 20px;
-    height: 10px;
-    background: rgba(0,0,0,0.3);
-    border-radius: 50% 0 0 50%;
+  .leg-path {
+    transform-origin: top center;
+    animation: ${props => props.run ? 'rotaryGallop var(--stride-duration) infinite linear' : 'none'};
+  }
+
+  .head-neck {
+    transform-origin: 155px 55px;
+    animation: ${props => props.run ? 'neckPower var(--stride-duration) infinite ease-in-out' : 'none'};
   }
 `;
 
-const LegSegment = styled.div`
-  position: absolute;
-  width: 7px;
-  height: 26px;
-  background: ${props => props.color};
-  border-radius: 4px;
-  transform-origin: top;
-  animation: ${props => (props.front ? frontGait : backGait)} 
-             ${props => 0.4 / props.v}s infinite linear;
-  animation-play-state: ${props => props.active ? 'running' : 'paused'};
-  animation-delay: ${props => props.delay}s;
-`;
-
-const UIControls = styled.div`
-  margin-top: 50px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 20px;
-`;
-
-const BigButton = styled.button`
-  padding: 20px 60px;
-  font-size: 1.5rem;
-  font-weight: 900;
-  text-transform: uppercase;
-  color: #020617;
-  background: #f59e0b;
-  border: none;
-  border-radius: 15px;
-  cursor: pointer;
-  box-shadow: 0 6px 0 #b45309;
-  transition: transform 0.1s;
-  &:active { transform: translateY(4px); box-shadow: none; }
-  &:disabled { opacity: 0.5; cursor: not-allowed; }
-`;
-
-// --- Simulation Logic ---
-const HORSES_DATA = [
-  { id: 1, name: "Inferno", color: "#dc2626", stamina: 0.92 },
-  { id: 2, name: "Tsunami", color: "#2563eb", stamina: 0.88 },
-  { id: 3, name: "Quicksilver", color: "#94a3b8", stamina: 0.95 },
-  { id: 4, name: "Obsidian", color: "#4b5563", stamina: 0.90 },
-];
-
-const App = () => {
-  const [horses, setHorses] = useState(HORSES_DATA.map(h => ({ ...h, pos: 0, v: 0, wins: 0 })));
-  const [isRacing, setIsRacing] = useState(false);
-  const [winner, setWinner] = useState(null);
-  const frameId = useRef();
-
-  const handleFinish = (winnerObj) => {
-    setIsRacing(false);
-    setWinner(winnerObj.name);
-    setHorses(prev => prev.map(h => h.id === winnerObj.id ? { ...h, wins: h.wins + 1 } : h));
-  };
-
-  const raceLoop = useCallback(() => {
-    setHorses(prev => {
-      let raceDone = false;
-      const next = prev.map(h => {
-        if (h.pos >= 84 || raceDone) return h;
-        
-        // Physics: Variable Speed + Stamina Retention
-        const fatigue = (h.pos / 100) * (1 - h.stamina);
-        const velocity = 0.45 + (Math.random() * 0.45) - (fatigue * 0.2);
-        const newPos = h.pos + velocity;
-
-        if (newPos >= 84) {
-          raceDone = true;
-          handleFinish(h);
-        }
-        return { ...h, pos: newPos, v: velocity };
-      });
-      return next;
-    });
-    if (isRacing) frameId.current = requestAnimationFrame(raceLoop);
-  }, [isRacing]);
-
-  useEffect(() => {
-    if (isRacing) frameId.current = requestAnimationFrame(raceLoop);
-    return () => cancelAnimationFrame(frameId.current);
-  }, [isRacing, raceLoop]);
-
-  const startRace = () => {
-    setHorses(prev => prev.map(h => ({ ...h, pos: 0, v: 0 })));
-    setWinner(null);
-    setIsRacing(true);
+const Horse = ({ horse, isRacing }) => {
+  // Scientifically accurate gallop timing offsets
+  const gaitDelays = { 
+    backLeft: '-0.3s', 
+    backRight: '-0.42s', 
+    frontLeft: '-0.05s', 
+    frontRight: '-0.15s' 
   };
 
   return (
-    <>
+    <HorseActor progress={horse.pos} v={horse.v} run={isRacing}>
+      <svg viewBox="0 0 300 160" className="horse-body">
+        <defs>
+          <linearGradient id={`coat-${horse.id}`} x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor={horse.color} />
+            <stop offset="100%" stopColor="#000" stopOpacity="0.6" />
+          </linearGradient>
+        </defs>
+
+        {/* Back Legs (Far side) */}
+        <path className="leg-path" d="M85,85 L70,145" stroke={horse.color} strokeWidth="6" strokeLinecap="round" opacity="0.5" style={{ animationDelay: gaitDelays.backLeft }} />
+        <path className="leg-path" d="M105,85 L115,145" stroke={horse.color} strokeWidth="6" strokeLinecap="round" opacity="0.5" style={{ animationDelay: gaitDelays.backRight }} />
+
+        {/* Powerful Torso */}
+        <path 
+          d="M60,85 C40,70 30,40 55,30 C90,15 150,35 180,50 C220,65 230,95 210,120 C185,140 85,135 60,85 Z" 
+          fill={`url(#coat-${horse.id})`} 
+        />
+
+        {/* Head/Neck with Muscle Definition */}
+        <g className="head-neck">
+          <path d="M180,50 Q210,10 240,15 L255,50 Q230,85 195,95 Z" fill={horse.color} />
+          <path d="M240,15 Q275,15 285,40 L260,75 Q240,75 230,50 Z" fill={horse.color} />
+          <circle cx="260" cy="35" r="2.5" fill="white" />
+        </g>
+
+        {/* Front Legs (Near side) */}
+        <path className="leg-path" d="M175,90 L185,150" stroke={horse.color} strokeWidth="10" strokeLinecap="round" style={{ animationDelay: gaitDelays.frontLeft }} />
+        <path className="leg-path" d="M200,90 L180,150" stroke={horse.color} strokeWidth="10" strokeLinecap="round" style={{ animationDelay: gaitDelays.frontRight }} />
+        
+        {/* Tail */}
+        <path d="M58,80 Q20,50 15,130" fill="none" stroke="#111" strokeWidth="4" strokeLinecap="round" opacity="0.7" />
+      </svg>
+    </HorseActor>
+  );
+};
+
+// --- App Logic ---
+
+const HORSES = [
+  { id: 1, name: "VANGUARD", color: "#78350f" },
+  { id: 2, name: "STORM", color: "#475569" },
+  { id: 3, name: "EMBER", color: "#b91c1c" },
+  { id: 4, name: "ONYX", color: "#09090b" },
+];
+
+const App = () => {
+  const [horses, setHorses] = useState(HORSES.map(h => ({ ...h, pos: 0, v: 0 })));
+  const [racing, setRacing] = useState(false);
+  const [winner, setWinner] = useState(null);
+  const raf = useRef();
+
+  const loop = useCallback(() => {
+    setHorses(prev => {
+      let over = false;
+      const next = prev.map(h => {
+        if (h.pos >= 86) { over = true; return h; }
+        const step = 0.5 + Math.random() * 0.6;
+        return { ...h, pos: h.pos + step, v: step };
+      });
+      if (over) {
+        setWinner([...next].sort((a,b) => b.pos - a.pos)[0].name);
+        setRacing(false);
+      }
+      return next;
+    });
+    if (racing) raf.current = requestAnimationFrame(loop);
+  }, [racing]);
+
+  useEffect(() => {
+    if (racing) raf.current = requestAnimationFrame(loop);
+    return () => cancelAnimationFrame(raf.current);
+  }, [racing, loop]);
+
+  return (
+    <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
       <GlobalStyle />
-      <Stage>
-        <h1 style={{ color: '#f59e0b', fontSize: '3rem', margin: 0, letterSpacing: '2px' }}>PRO DERBY SIM</h1>
-        <p style={{ color: '#475569', marginBottom: '40px' }}>Advanced Skeletal Motion Engine v2.0</p>
-
-        <TrackBoard>
-          <FinishLine />
-          {horses.map(h => (
-            <Lane key={h.id}>
-              <HorseEntity progress={h.pos}>
-                <MuscularBody color={h.color} active={isRacing && !winner} v={h.v || 0.5}>
-                  <AnatomicalHead color={h.color} />
-                  
-                  {/* Front Legs - Leading Gait */}
-                  <LegSegment front color={h.color} active={isRacing && !winner} v={h.v || 0.5} delay="0" style={{ left: '48px' }} />
-                  <LegSegment front color={h.color} active={isRacing && !winner} v={h.v || 0.5} delay="-0.08" style={{ left: '42px' }} />
-                  
-                  {/* Back Legs - Pushing Gait */}
-                  <LegSegment color={h.color} active={isRacing && !winner} v={h.v || 0.5} delay="-0.22" style={{ left: '15px' }} />
-                  <LegSegment color={h.color} active={isRacing && !winner} v={h.v || 0.5} delay="-0.30" style={{ left: '8px' }} />
-                </MuscularBody>
-                
-                <div style={{ position: 'absolute', bottom: '-28px', width: '100%', textAlign: 'center', fontSize: '11px', fontWeight: 'bold', color: '#94a3b8' }}>
-                  {h.name}
-                </div>
-              </HorseEntity>
-            </Lane>
-          ))}
-        </TrackBoard>
-
-        <UIControls>
-          {winner && <h2 style={{ color: '#f59e0b', margin: 0 }}>🏆 {winner} Claims the Championship!</h2>}
-          <BigButton onClick={startRace} disabled={isRacing}>
-            {winner ? 'Enter Next Derby' : 'Release the Gate'}
-          </BigButton>
-          
-          <div style={{ display: 'flex', gap: '20px', marginTop: '20px' }}>
-            {horses.map(h => (
-              <div key={h.id} style={{ background: '#0f172a', padding: '10px 20px', borderRadius: '10px', border: `1px solid ${h.color}44`, textAlign: 'center' }}>
-                <div style={{ color: h.color, fontSize: '10px', fontWeight: 'bold' }}>{h.name}</div>
-                <div style={{ fontSize: '1.2rem', fontWeight: '900' }}>{h.wins} W</div>
-              </div>
-            ))}
+      <h1 style={{ textAlign: 'center', color: '#fbbf24', letterSpacing: '12px', margin: '15px' }}>
+        {winner ? `${winner} VICTORIOUS` : "CHAMPIONSHIP TURF"}
+      </h1>
+      <Arena>
+        {/* Finish Line Overlay */}
+        <div style={{ position: 'absolute', right: '11%', top: 0, bottom: 0, width: '25px', background: 'repeating-linear-gradient(45deg, #fff, #fff 10px, #000 10px, #000 20px)', zIndex: 5, borderLeft: '3px solid #fbbf24' }} />
+        
+        {horses.map(h => (
+          <div key={h.id} style={{ flex: 1, borderBottom: '1px solid rgba(255,255,255,0.05)', position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <Horse horse={h} isRacing={racing} />
           </div>
-        </UIControls>
-      </Stage>
-    </>
+        ))}
+      </Arena>
+      <button 
+        onClick={() => { setHorses(h => h.map(i => ({...i, pos: 0}))); setWinner(null); setRacing(true); }}
+        style={{ margin: '20px auto', padding: '15px 60px', background: '#fbbf24', border: 'none', borderRadius: '12px', fontWeight: '900', cursor: 'pointer', fontSize: '1.2rem', boxShadow: '0 8px 0 #b45309' }}
+      >
+        {racing ? 'RACING...' : 'UNLEASH'}
+      </button>
+    </div>
   );
 };
 
